@@ -4,6 +4,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
+RUN chmod -R +x /app/.venv/bin
 COPY . /app
 RUN uv sync --frozen --no-dev
 
@@ -22,6 +23,6 @@ USER appuser
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:$PORT/health || exit 1
 
-CMD ["python", "-m", "server.main"]
+CMD ["sh", "-c", "python -m uvicorn server.main:app --host 0.0.0.0 --port $PORT"]
