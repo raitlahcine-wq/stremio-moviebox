@@ -1,31 +1,38 @@
-# Build stage
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+# Use the official Python slim base image
+FROM python:3.12-slim-bookworm
+
+# Install the ultra-fast uv package manager directly from its official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Configure uv to install dependencies directly into the global system Python environment
+ENV UV_PROJECT_ENVIRONMENT=/usr/local
+ENV UV_COMPILE_BYTECODE=1
+
 WORKDIR /app
+
+# Create a secure non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Install curl for the container healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Copy configuration files first to optimize Docker layer caching
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
+
+# Copy the rest of your Stremio application files
 COPY . /app
 RUN uv sync --frozen --no-dev
 
-# Final stage
-FROM python:3.12-slim-bookworm
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-WORKDIR /app
+# Ensure the app user owns the application folder
+RUN chown -R appuser:appuser /app
 
-# Install curl for healthcheck
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-# Copy application files securely
-COPY --from=builder --chown=appuser:appuser /app /app
-
-# THE MAGIC TRICK: Direct the global system python to read the venv packages
-ENV PYTHONPATH="/app/.venv/lib/python3.12/site-packages"
-
+# Drop root privileges safely
 USER appuser
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/health || exit 1
 
-# Launch using the global python binary instead of the restricted venv one
-CMD ["sh", "-c", "python -m uvicorn server.main:app --host 0.0.0.0 --port $PORT"]
+# Launch uvicorn globally from the system binary path
+CMD ["sh", "-c", "uvicorn server.main:app --host 0.0.0.0 --port $PORT"]
