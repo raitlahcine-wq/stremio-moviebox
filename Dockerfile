@@ -33,5 +33,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/health || exit 1
 
-# Use 'uv run' to seamlessly execute uvicorn within the project environment
-CMD ["sh", "-c", "uv run uvicorn server.main:app --host 0.0.0.0 --port $PORT"]
+# Launch uvicorn directly from the fully owned and unlocked virtual environment
+CMD ["sh", "-c", "/app/.venv/bin/uvicorn server.main:app --host 0.0.0.0 --port $PORT"]
